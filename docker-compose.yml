@@ -1,0 +1,64 @@
+#Rename
+version: "3.7"
+services:
+  project-php:
+    build:
+      args:
+        user: ${DOCKER_USER:-www}
+        uid: ${DOCKER_UID:-1000}
+      context: ./
+      dockerfile: ./.docker/php/dockerfile
+    container_name: ${APP_NAME}-php
+    restart: unless-stopped
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www
+      - ~/.ssh:/home/${DOCKER_USER:-www}/.ssh
+      - ./.docker/php/php.ini:/usr/local/etc/php/php.ini
+    environment:
+      PHP_IDE_CONFIG: "serverName=localhost"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - project-network
+
+  project-mysql:
+    image: mysql:8.0
+    container_name: ${APP_NAME}-mysql
+    restart: unless-stopped
+    command: '--secure-file-priv=NULL --bind-address=0.0.0.0'
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ./.docker/mysql/my.cnf:/etc/mysql/my.cnf
+      - ./.docker/mysql/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+#      - ./.docker/mysql/mysql-files:/var/lib/mysql-files
+    networks:
+      - project-network
+
+  project-nginx:
+    build:
+      context: ./
+      dockerfile: ./.docker/nginx/nginx.dockerfile
+    container_name: ${APP_NAME}-nginx
+    restart: unless-stopped
+    ports:
+     - '${DOCKER_HTTPS_PORT:-8000}:443'
+     - '${DOCKER_HTTP_PORT:-8080}:80'
+    volumes:
+      - ./:/var/www
+      - ./.docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - project-network
+
+networks:
+  project-network:
+    name: ${APP_NAME}-network
+    driver: bridge
